@@ -1,25 +1,26 @@
 {
-  "brand": "Astra Store",
-  "frontend": [
-    "index.html",
-    "style.css",
-    "script.js",
-    "catalog.json"
-  ],
-  "backend": [
-    "api/create-pix.js",
-    "api/create-order.js"
-  ],
-  "product_images": 4,
-  "team_images": 5,
-  "demo_prices_and_stock": true,
+  "name": "Astra Store",
+  "version": "2.2.0",
   "payments": [
-    "Static Pix QR and copy-paste using PIX_KEY (manual confirmation)",
-    "Mercado Pago Orders Checkout for card or all account-enabled methods"
+    "Checkout sem processador externo e sem cobranca online",
+    "Registro de comprador, endereco e pedido no primeiro passo",
+    "Registro do titular, tipo, bandeira, quatro ultimos digitos e parcelas no segundo passo"
   ],
-  "inventory_persistence": false,
-  "stock_per_size": true,
-  "package_version": "corrected-2026-11-17",
-  "pix_server_function_included": true,
-  "payment_activation_blocked_until_real_catalog": true
+  "stored_data": [
+    "nome, e-mail, CPF e telefone do comprador",
+    "CEP e endereco completo de entrega",
+    "itens, tamanhos, quantidades, precos e total do pedido",
+    "nome do titular, tipo, bandeira, quatro ultimos digitos e parcelas",
+    "status do pedido e pagamento nao processado"
+  ],
+  "never_stored": [
+    "numero completo do cartao",
+    "codigo de seguranca CVV/CVC",
+    "data de validade do cartao"
+  ],
+  "routes": [
+    "GET /api/health",
+    "POST /api/checkout/start",
+    "POST /api/checkout/complete"
+  ]
 }

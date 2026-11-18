@@ -13,6 +13,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     const mainNav = $("#mainNav");
     const header = $(".site-header");
     const progressBar = $("#scrollProgress");
+    const demoPaymentWarning = $("#demoPaymentWarning");
     const reducedMotion = window.matchMedia(
         "(prefers-reduced-motion: reduce)"
     ).matches;
@@ -187,6 +188,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         catalog.products.map(product => [product.id, product])
     );
 
+    if (demoPaymentWarning) {
+        demoPaymentWarning.hidden = false;
+        demoPaymentWarning.textContent = catalog.demoData === true
+            ? "Catálogo com preços de demonstração. Esta versão registra pedidos, mas não processa cobranças; nenhum cartão será cobrado."
+            : "Esta versão registra pedidos, mas não processa cobranças; nenhum cartão será cobrado.";
+    }
+
     const storageKey = "astra-store-cart-v1";
 
     let cart = [];
@@ -235,35 +243,16 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     const checkoutForm = $("#checkoutForm");
     const checkoutButton = $("#checkoutButton");
-
     const paymentSelector = $("#paymentSelector");
-    const paymentInputs = $$('input[name="paymentMethod"]');
 
     const buyerNameInput = $("#buyerName");
     const buyerEmailInput = $("#buyerEmail");
     const buyerCpfInput = $("#buyerCpf");
-
-    // ELEMENTOS DO PIX
-    const pixPaymentPanel = $("#pixPaymentPanel");
-    const pixQrImage = $("#pixQrImage");
-    const pixTotal = $("#pixTotal");
-    const pixKeyDisplay = $("#pixKeyDisplay");
-    const pixTxid = $("#pixTxid");
-    const pixCopyPaste = $("#pixCopyPaste");
-
-    const copyPixCodeButton = $("#copyPixCode");
-    const backToCheckoutButton = $("#backToCheckout");
-
-    let currentPixPayload = "";
-
-    // ELEMENTOS DO CARTÃO
     const cardPaymentPanel = $("#cardPaymentPanel");
-    const cardPaymentBrickContainer = $("#cardPaymentBrickContainer");
-
-    let mercadoPago = null;
-    let bricksBuilder = null;
-    let cardPaymentBrickController = null;
-    let cardBackButton = null;
+    const cardInfoForm = $("#cardInfoForm");
+    const orderSuccessPanel = $("#orderSuccessPanel");
+    const finishSuccessButton = $("#finishSuccessButton");
+    let currentOrderReference = "";
 
     const saveCart = () => {
         localStorage.setItem(storageKey, JSON.stringify(cart));
@@ -309,42 +298,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             : "cart-message";
     }
 
-    // RESETAR ÁREAS DE PAGAMENTO
-    async function destroyCardBrick() {
-        if (cardPaymentBrickController) {
-            try {
-                await cardPaymentBrickController.unmount();
-            } catch (error) {
-                console.warn("Erro ao fechar formulário de cartão:", error);
-            }
-
-            cardPaymentBrickController = null;
-        }
-
-        if (cardPaymentBrickContainer) {
-            cardPaymentBrickContainer.replaceChildren();
-        }
-    }
-
-    async function resetPaymentPanels() {
-        await destroyCardBrick();
-
-        if (cardPaymentPanel) cardPaymentPanel.hidden = true;
-        if (pixPaymentPanel) pixPaymentPanel.hidden = true;
-
-        if (checkoutForm) checkoutForm.hidden = false;
-
-        if (paymentSelector) paymentSelector.hidden = false;
-
-        if (pixQrImage) pixQrImage.removeAttribute("src");
-        if (pixCopyPaste) pixCopyPaste.value = "";
-        if (pixTxid) pixTxid.textContent = "—";
-
-        currentPixPayload = "";
-
-        showCartMessage("");
-    }
-
     // ATUALIZAR CARTÕES DE PRODUTOS
     function updateProductCards() {
         products.forEach(product => {
@@ -387,10 +340,6 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     // RENDERIZAR CARRINHO
     function renderCart() {
-        if (pixPaymentPanel && !pixPaymentPanel.hidden) {
-            void resetPaymentPanels();
-        }
-
         const validCart = cart.filter(item => {
             const product = products.get(item.id);
 
@@ -432,12 +381,13 @@ document.addEventListener("DOMContentLoaded", async () => {
             cartSubtotal.textContent = money.format(subtotal);
         }
 
+        const successVisible = Boolean(orderSuccessPanel && !orderSuccessPanel.hidden);
         if (cartEmpty) {
-            cartEmpty.hidden = cart.length > 0;
+            cartEmpty.hidden = cart.length > 0 || successVisible;
         }
 
         if (cartCheckout) {
-            cartCheckout.hidden = cart.length === 0;
+            cartCheckout.hidden = cart.length === 0 && !successVisible;
         }
 
         if (!cartItems) return;
@@ -763,502 +713,197 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     });
 
-    // FORMA DE PAGAMENTO SELECIONADA
-    const selectedPaymentMethod = () => {
-        return paymentInputs.find(input => input.checked)?.value ||
-            "pix_direct";
-    };
-
+    // CHECKOUT EM DUAS ETAPAS: REGISTRO DO PEDIDO E CONFIRMAÇÃO DE METADADOS
     function updatePaymentAction() {
         if (!checkoutButton) return;
-
-        if (catalog.demoData === true) {
-            checkoutButton.textContent = "Checkout em configuração";
-            checkoutButton.disabled = true;
-            return;
-        }
-
-        checkoutButton.disabled = false;
-
-        const method = selectedPaymentMethod();
-
-        if (method === "pix_direct") {
-            checkoutButton.textContent = "Gerar QR Code Pix";
-        } else if (method === "card") {
-            checkoutButton.textContent = "Continuar para dados do cartão";
-        } else {
-            checkoutButton.textContent = "Continuar para Mercado Pago";
-        }
+        checkoutButton.textContent = "Continuar para dados do cartão";
     }
 
-    // MUDANÇA DE PAGAMENTO
-    paymentInputs.forEach(input => {
-        input.addEventListener("change", async () => {
-            await resetPaymentPanels();
-            updatePaymentAction();
-        });
-    });
-
-    // VALIDAR CPF
     function validateCPF(value) {
         const cpf = String(value || "").replace(/\D/g, "");
-
-        if (cpf.length !== 11) return false;
-
-        if (/^(\d)\1{10}$/.test(cpf)) return false;
-
-        return true;
+        if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
+        let sum = 0;
+        for (let index = 0; index < 9; index += 1) sum += Number(cpf[index]) * (10 - index);
+        let digit = (sum * 10) % 11;
+        if (digit === 10) digit = 0;
+        if (digit !== Number(cpf[9])) return false;
+        sum = 0;
+        for (let index = 0; index < 10; index += 1) sum += Number(cpf[index]) * (11 - index);
+        digit = (sum * 10) % 11;
+        if (digit === 10) digit = 0;
+        return digit === Number(cpf[10]);
     }
 
-    // VALIDAR COMPRADOR
     function validateBuyer() {
-        const buyerName = buyerNameInput?.value.trim() || "";
-        const buyerEmail = buyerEmailInput?.value.trim() || "";
-        const buyerCpf = buyerCpfInput?.value.trim() || "";
-
-        if (!buyerName) {
-            showCartMessage("Informe seu nome completo.", true);
-            buyerNameInput?.focus();
-            return null;
-        }
-
-        if (!buyerEmail || !buyerEmailInput.checkValidity()) {
-            showCartMessage("Informe um e-mail válido.", true);
-            buyerEmailInput?.focus();
-            return null;
-        }
-
-        if (!validateCPF(buyerCpf)) {
-            showCartMessage(
-                "Informe um CPF válido com 11 números.",
-                true
-            );
-
-            buyerCpfInput?.focus();
-
-            return null;
-        }
-
-        return {
-            buyerName,
-            buyerEmail,
-            buyerCpf: buyerCpf.replace(/\D/g, "")
+        const buyer = {
+            buyerName: buyerNameInput?.value.trim() || "",
+            buyerEmail: buyerEmailInput?.value.trim() || "",
+            buyerPhone: $("#buyerPhone")?.value.trim() || "",
+            buyerCpf: buyerCpfInput?.value.trim() || "",
+            postalCode: $("#postalCode")?.value.trim() || "",
+            street: $("#street")?.value.trim() || "",
+            addressNumber: $("#addressNumber")?.value.trim() || "",
+            complement: $("#complement")?.value.trim() || "",
+            neighborhood: $("#neighborhood")?.value.trim() || "",
+            city: $("#city")?.value.trim() || "",
+            state: $("#state")?.value.trim().toUpperCase() || ""
         };
+
+        if (!validateCPF(buyer.buyerCpf)) {
+            showCartMessage("Informe um CPF válido com 11 números.", true);
+            buyerCpfInput?.focus();
+            return null;
+        }
+        if (buyer.postalCode.replace(/\D/g, "").length !== 8) {
+            showCartMessage("Informe um CEP válido com 8 números.", true);
+            $("#postalCode")?.focus();
+            return null;
+        }
+        if (!/^[A-Z]{2}$/.test(buyer.state)) {
+            showCartMessage("Informe a UF com duas letras, por exemplo SP.", true);
+            $("#state")?.focus();
+            return null;
+        }
+        return buyer;
     }
 
-    // REQUISIÇÕES À API DA LOJA
     async function apiPost(endpoint, body) {
-        const response = await fetch(endpoint, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            },
-            body: JSON.stringify(body)
-        });
-
-        const data = await response.json().catch(() => ({}));
-
-        if (!response.ok) {
-            throw new Error(
-                data.message ||
-                data.error ||
-                `Erro na comunicação com o servidor (${response.status}).`
-            );
+        let response;
+        try {
+            response = await fetch(endpoint, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Accept": "application/json" },
+                cache: "no-store",
+                body: JSON.stringify(body)
+            });
+        } catch (error) {
+            throw new Error("Não foi possível alcançar o servidor da loja. Inicie pelo arquivo iniciar-loja.bat (Windows) ou execute npm run dev dentro da pasta do projeto.");
         }
 
+        if (response.status === 405) {
+            throw new Error("Erro 405: o checkout está sendo aberto por um servidor que não executa a API. Feche o Live Server e inicie a loja com iniciar-loja.bat (Windows) ou npm run dev. Acesse http://localhost:3000.");
+        }
+
+        const contentType = response.headers.get("content-type") || "";
+        if (!contentType.includes("application/json")) {
+            if (response.status === 404) {
+                throw new Error("A rota do checkout não existe neste servidor. Inicie o projeto pelo Node.js com iniciar-loja.bat ou npm run dev e acesse http://localhost:3000.");
+            }
+            throw new Error(`O servidor respondeu de forma inesperada (${response.status}). Inicie a loja pelo servidor Node.js.`);
+        }
+
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            throw new Error(data.message || `Erro na comunicação com o servidor (${response.status}).`);
+        }
         return data;
     }
 
-    async function apiGet(endpoint) {
-        const response = await fetch(endpoint, {
-            method: "GET",
-            cache: "no-store"
-        });
-
-        const data = await response.json().catch(() => ({}));
-
-        if (!response.ok) {
-            throw new Error(
-                data.message ||
-                data.error ||
-                "Não foi possível acessar o servidor."
-            );
-        }
-
-        return data;
-    }
-
-    // INICIALIZAR MERCADO PAGO
-    async function initializeMercadoPago() {
-        if (bricksBuilder) return;
-
-        if (!window.MercadoPago) {
-            throw new Error(
-                "SDK do Mercado Pago não carregou. Verifique a conexão."
-            );
-        }
-
-        const config = await apiGet("/api/config");
-
-        if (!config.publicKey) {
-            throw new Error(
-                "A chave pública do Mercado Pago não foi configurada."
-            );
-        }
-
-        mercadoPago = new window.MercadoPago(
-            config.publicKey,
-            {
-                locale: "pt-BR"
-            }
-        );
-
-        bricksBuilder = mercadoPago.bricks();
-    }
-
-    // BOTÃO DE VOLTAR DO CARTÃO
-    function createCardBackButton() {
-        if (cardBackButton) return cardBackButton;
-
-        cardBackButton = document.createElement("button");
-
-        cardBackButton.id = "cardBackToCheckout";
-        cardBackButton.type = "button";
-        cardBackButton.className = "pix-back-button";
-        cardBackButton.textContent = "Voltar às formas de pagamento";
-
-        cardBackButton.addEventListener("click", async () => {
-            await resetPaymentPanels();
-        });
-
-        cardPaymentPanel.append(cardBackButton);
-
-        return cardBackButton;
-    }
-
-    // EXIBIR FORMULÁRIO SEGURO DE CARTÃO
-    async function showCardPayment(buyer) {
-        const items = getCartItemsForPayment();
-
-        if (!items.length) {
-            throw new Error("Seu carrinho está vazio.");
-        }
-
-        const quote = await apiPost(
-            "/api/checkout/quote",
-            { items }
-        );
-
-        const amount = Number(quote.totalAmount);
-
-        if (!Number.isFinite(amount) || amount <= 0) {
-            throw new Error("O valor do pedido é inválido.");
-        }
-
-        await initializeMercadoPago();
-
-        await destroyCardBrick();
-
-        pixPaymentPanel.hidden = true;
-        checkoutForm.hidden = true;
-        paymentSelector.hidden = true;
-        cardPaymentPanel.hidden = false;
-
-        createCardBackButton();
-
-        showCartMessage(
-            "Preencha os dados do cartão no formulário seguro do Mercado Pago."
-        );
-
-        cardPaymentBrickController = await bricksBuilder.create(
-            "cardPayment",
-            "cardPaymentBrickContainer",
-            {
-                initialization: {
-                    amount,
-                    payer: {
-                        email: buyer.buyerEmail,
-                        identification: {
-                            type: "CPF",
-                            number: buyer.buyerCpf
-                        }
-                    }
-                },
-
-                callbacks: {
-                    onReady: () => {
-                        showCartMessage(
-                            `Formulário pronto. Total: ${money.format(amount)}.`
-                        );
-                    },
-
-                    onSubmit: async formData => {
-                        try {
-                            const result = await apiPost(
-                                "/api/card-payment",
-                                {
-                                    items,
-                                    buyer,
-                                    formData
-                                }
-                            );
-
-                            const status = result.status;
-
-                            if (status === "approved") {
-                                showCartMessage(
-                                    `Pagamento aprovado! Número da transação: ${result.id}.`
-                                );
-
-                                notify("Pagamento aprovado pelo Mercado Pago.");
-                            } else if (
-                                status === "pending" ||
-                                status === "in_process" ||
-                                status === "authorized"
-                            ) {
-                                showCartMessage(
-                                    `Pagamento em análise. Status: ${status}.`
-                                );
-
-                                notify("Pagamento recebido para análise.");
-                            } else {
-                                throw new Error(
-                                    result.statusDetail ||
-                                    `Pagamento não aprovado. Status: ${status}.`
-                                );
-                            }
-
-                            return result;
-
-                        } catch (error) {
-                            showCartMessage(error.message, true);
-                            throw error;
-                        }
-                    },
-
-                    onError: error => {
-                        console.error(
-                            "Erro no formulário de cartão:",
-                            error
-                        );
-
-                        showCartMessage(
-                            "Ocorreu um erro no formulário de cartão. Confira os dados e tente novamente.",
-                            true
-                        );
-                    }
-                }
-            }
-        );
-    }
-
-    // GERAR PIX REAL PELO MERCADO PAGO
-    async function generatePix(buyer) {
-        const items = getCartItemsForPayment();
-
-        if (!items.length) {
-            throw new Error("Seu carrinho está vazio.");
-        }
-
-        const result = await apiPost(
-            "/api/create-pix",
-            {
-                ...buyer,
-                items
-            }
-        );
-
-        if (
-            !result.pixCopyPaste ||
-            !result.qrCodeDataUrl ||
-            !result.totalAmount
-        ) {
-            throw new Error(
-                "O Mercado Pago não retornou os dados completos do Pix."
-            );
-        }
-
-        currentPixPayload = result.pixCopyPaste;
-
-        pixQrImage.src = result.qrCodeDataUrl;
-
-        pixTotal.textContent = money.format(
-            Number(result.totalAmount)
-        );
-
-        pixKeyDisplay.textContent =
-            result.pixKeyDisplay || "Mercado Pago";
-
-        const recipientLabel = pixKeyDisplay
-            .closest(".pix-recipient-row")
-            ?.querySelector("span");
-
-        if (recipientLabel) {
-            recipientLabel.textContent = "Recebedor";
-        }
-
-        pixTxid.textContent = result.txid || result.paymentId || "—";
-
-        pixCopyPaste.value = currentPixPayload;
-
-        cardPaymentPanel.hidden = true;
-        paymentSelector.hidden = true;
-        checkoutForm.hidden = true;
-        pixPaymentPanel.hidden = false;
-
-        showCartMessage(
-            "QR Code gerado. Confira o valor e o recebedor no aplicativo do seu banco antes de confirmar."
-        );
-
-        notify("QR Code Pix gerado com sucesso.");
-    }
-
-    // CHECKOUT PRO
-    async function startMercadoPagoCheckout(buyer) {
-        const items = getCartItemsForPayment();
-
-        if (!items.length) {
-            throw new Error("Seu carrinho está vazio.");
-        }
-
-        const result = await apiPost(
-            "/api/create-order",
-            {
-                ...buyer,
-                items
-            }
-        );
-
-        if (!result.checkoutUrl) {
-            throw new Error(
-                "O Mercado Pago não retornou o endereço de pagamento."
-            );
-        }
-
-        const checkoutURL = new URL(result.checkoutUrl);
-
-        const validDomain =
-            checkoutURL.protocol === "https:" &&
-            (
-                checkoutURL.hostname === "mercadopago.com.br" ||
-                checkoutURL.hostname.endsWith(".mercadopago.com.br") ||
-                checkoutURL.hostname === "mercadopago.com" ||
-                checkoutURL.hostname.endsWith(".mercadopago.com")
-            );
-
-        if (!validDomain) {
-            throw new Error(
-                "O endereço de pagamento retornado não é válido."
-            );
-        }
-
-        localStorage.setItem(
-            "astra-store-last-order",
-            result.orderId || ""
-        );
-
-        window.location.assign(checkoutURL.href);
-    }
-
-    // FINALIZAR PEDIDO
     checkoutForm?.addEventListener("submit", async event => {
         event.preventDefault();
-
         if (!cart.length) {
-            showCartMessage("Seu carrinho está vazio.", true);
+            showCartMessage("Sua sacola está vazia.", true);
             return;
         }
-
-        if (catalog.demoData === true) {
-            showCartMessage(
-                "O catálogo está em modo de demonstração. Configure preços e estoque reais antes de ativar os pagamentos.",
-                true
-            );
-            return;
-        }
-
         if (!checkoutForm.reportValidity()) return;
-
         const buyer = validateBuyer();
-
         if (!buyer) return;
 
-        const paymentMethod = selectedPaymentMethod();
-
         const originalLabel = checkoutButton.textContent;
-
         checkoutButton.disabled = true;
-
-        checkoutButton.textContent = paymentMethod === "pix_direct"
-            ? "Gerando Pix..."
-            : paymentMethod === "card"
-                ? "Carregando cartão..."
-                : "Preparando checkout...";
-
-        showCartMessage(
-            "Preparando seu pagamento com segurança..."
-        );
+        checkoutButton.textContent = "Registrando seus dados...";
+        showCartMessage("Salvando comprador, endereço e itens do pedido no banco de dados...");
 
         try {
-            if (paymentMethod === "pix_direct") {
-                await generatePix(buyer);
-            }
-
-            if (paymentMethod === "card") {
-                await showCardPayment(buyer);
-            }
-
-            if (paymentMethod === "mercadopago") {
-                await startMercadoPagoCheckout(buyer);
-            }
-
+            const result = await apiPost("/api/checkout/start", {
+                buyer,
+                items: getCartItemsForPayment()
+            });
+            currentOrderReference = result.orderReference;
+            checkoutForm.hidden = true;
+            if (paymentSelector) paymentSelector.hidden = true;
+            if (cardPaymentPanel) cardPaymentPanel.hidden = false;
+            if (orderSuccessPanel) orderSuccessPanel.hidden = true;
+            showCartMessage(`Pedido ${currentOrderReference} registrado. Preencha os dados não sensíveis do cartão para concluir o registro.`);
         } catch (error) {
-            console.error("Erro no checkout:", error);
-
-            showCartMessage(error.message, true);
-
-            if (cardPaymentPanel) {
-                cardPaymentPanel.hidden = true;
-            }
-
-            checkoutForm.hidden = false;
-            paymentSelector.hidden = false;
-
+            console.error("Erro ao registrar o pedido:", error);
+            showCartMessage(error.message || "Não foi possível registrar o pedido.", true);
         } finally {
             checkoutButton.disabled = false;
-
             checkoutButton.textContent = originalLabel;
-
-            updatePaymentAction();
         }
     });
 
-    // COPIAR PIX
-    copyPixCodeButton?.addEventListener("click", async () => {
-        if (!currentPixPayload) return;
+    // Apenas bandeira, quatro últimos dígitos e parcelas são enviados ao servidor.
+    cardInfoForm?.addEventListener("submit", async event => {
+        event.preventDefault();
+        if (!currentOrderReference) {
+            showCartMessage("Não encontrei o pedido em andamento. Volte à sacola e tente novamente.", true);
+            return;
+        }
+        if (!cardInfoForm.reportValidity()) return;
+
+        const cardType = $("#cardType").value;
+        const installments = cardType === "debit" ? 1 : Number($("#cardInstallments").value);
+        const cardInfo = {
+            cardholderName: $("#cardholderName").value.trim(),
+            cardType,
+            brand: $("#cardBrand").value,
+            lastFour: $("#cardLastFour").value.replace(/\D/g, ""),
+            installments
+        };
+        const completeButton = $("#completeOrderButton");
+        const originalLabel = completeButton.textContent;
+        completeButton.disabled = true;
+        completeButton.textContent = "Finalizando pedido...";
+        showCartMessage("Salvando a confirmação do pedido...");
 
         try {
-            await navigator.clipboard.writeText(currentPixPayload);
-
-            notify("Código Pix copiado.");
-
-        } catch {
-            pixCopyPaste.focus();
-            pixCopyPaste.select();
-
-            const copied = document.execCommand("copy");
-
-            notify(
-                copied
-                    ? "Código Pix copiado."
-                    : "Selecione e copie o código Pix."
-            );
+            const result = await apiPost("/api/checkout/complete", {
+                orderReference: currentOrderReference,
+                cardInfo
+            });
+            $("#successOrderReference").textContent = result.orderReference;
+            $("#successOrderTotal").textContent = money.format(Number(result.totalAmount));
+            if (cardPaymentPanel) cardPaymentPanel.hidden = true;
+            if (orderSuccessPanel) orderSuccessPanel.hidden = false;
+            if (checkoutForm) checkoutForm.hidden = true;
+            if (paymentSelector) paymentSelector.hidden = true;
+            showCartMessage("");
+            cart = [];
+            saveCart();
+            renderCart();
+            currentOrderReference = "";
+            cardInfoForm.reset();
+            const installmentsField = $("#cardInstallments");
+            if (installmentsField) installmentsField.disabled = false;
+            notify("Pedido registrado com sucesso!");
+        } catch (error) {
+            console.error("Erro ao finalizar o pedido:", error);
+            showCartMessage(error.message || "Não foi possível finalizar o pedido.", true);
+        } finally {
+            completeButton.disabled = false;
+            completeButton.textContent = originalLabel;
         }
     });
 
-    // VOLTAR DO PIX
-    backToCheckoutButton?.addEventListener("click", async () => {
-        await resetPaymentPanels();
+    finishSuccessButton?.addEventListener("click", () => {
+        if (cartDialog?.open) cartDialog.close();
+        if (orderSuccessPanel) orderSuccessPanel.hidden = true;
+        if (checkoutForm) checkoutForm.hidden = false;
+        if (paymentSelector) paymentSelector.hidden = false;
+        checkoutForm?.reset();
+        renderCart();
+        showCartMessage("");
+    });
+
+    $("#cardType")?.addEventListener("change", event => {
+        const installments = $("#cardInstallments");
+        if (!installments) return;
+        const debit = event.target.value === "debit";
+        installments.disabled = debit;
+        if (debit) installments.value = "1";
+        else installments.disabled = false;
     });
 
     // ATUALIZAR CATÁLOGO E CARRINHO
@@ -1316,35 +961,6 @@ document.addEventListener("DOMContentLoaded", async () => {
         formMessage.className = "form-message is-success";
     });
 
-    // RETORNO DO MERCADO PAGO
-    const checkoutReturn = new URLSearchParams(
-        window.location.search
-    ).get("checkout");
-
-    if (checkoutReturn) {
-        const messages = {
-            approved:
-                "O checkout informou pagamento aprovado. Confirme a transação na sua conta Mercado Pago antes de liberar o pedido.",
-
-            pending:
-                "O pagamento está pendente. Aguarde a confirmação no Mercado Pago.",
-
-            failure:
-                "O pagamento não foi concluído. Você pode tentar novamente."
-        };
-
-        notify(
-            messages[checkoutReturn] ||
-            "Você retornou do checkout do Mercado Pago."
-        );
-
-        history.replaceState(
-            {},
-            document.title,
-            window.location.pathname + window.location.hash
-        );
-    }
-
     // CAMPO CPF
     buyerCpfInput?.addEventListener("input", () => {
         let value = buyerCpfInput.value.replace(/\D/g, "").slice(0, 11);
@@ -1367,6 +983,25 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         buyerCpfInput.value = value;
+    });
+
+
+    // Máscaras simples dos dados de entrega.
+    $("#postalCode")?.addEventListener("input", event => {
+        const digits = event.target.value.replace(/\D/g, "").slice(0, 8);
+        event.target.value = digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits;
+    });
+    $("#buyerPhone")?.addEventListener("input", event => {
+        const digits = event.target.value.replace(/\D/g, "").slice(0, 11);
+        if (digits.length <= 2) event.target.value = digits ? `(${digits}` : "";
+        else if (digits.length <= 7) event.target.value = `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+        else event.target.value = `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+    });
+    $("#state")?.addEventListener("input", event => {
+        event.target.value = event.target.value.replace(/[^a-z]/gi, "").slice(0, 2).toUpperCase();
+    });
+    $("#cardLastFour")?.addEventListener("input", event => {
+        event.target.value = event.target.value.replace(/\D/g, "").slice(0, 4);
     });
 
     // FUNDO ANIMADO DE ESTRELAS

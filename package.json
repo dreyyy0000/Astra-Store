@@ -1,11 +1,12 @@
 {
   "name": "astra-store",
-  "version": "1.0.0",
+  "version": "2.2.0",
   "private": true,
   "type": "module",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "check": "node --check server.js && node --check script.js && node --check api/health.js && node --check api/checkout/start.js && node --check api/checkout/complete.js && node --check lib/db.js && node --check lib/checkout.js"
   },
   "engines": {
     "node": ">=18"
@@ -13,6 +14,7 @@
   "dependencies": {
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
-    "helmet": "^8.1.0"
+    "helmet": "^8.1.0",
+    "mysql2": "^3.14.1"
   }
 }
