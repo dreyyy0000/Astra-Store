@@ -1,0 +1,77 @@
+ASTRA STORE — PACOTE CORRIGIDO
+================================
+
+Este é o projeto atualizado da Astra Store. Ele substitui a versão anterior chamada
+"loja-tcc-astronomica". Se ainda aparecer "Loja TCC" ou ilustrações geométricas
+nos produtos, você abriu a pasta antiga. Abra esta pasta, chamada "astra-store".
+
+ESTRUTURA
+---------
+index.html              Página principal
+style.css               Estilos e layout responsivo
+script.js               Menu, catálogo, carrinho e checkout
+catalog.json            Preços, tamanhos, estoque e dados públicos do Pix
+api/create-pix.js       Gera QR Pix com valor do carrinho e código copia e cola
+api/create-order.js     Cria checkout do Mercado Pago (cartão / outros meios)
+assets/produtos/        4 fotografias reais dos produtos
+assets/equipe/          5 fotografias dos integrantes
+
+IMPORTANTE SOBRE O CATÁLOGO
+---------------------------
+Os preços e quantidades em catalog.json são EXEMPLOS para demonstração, não foram
+confirmados pelo proprietário. Por segurança, o arquivo permanece com demoData=true
+e o botão de finalizar pagamento fica bloqueado enquanto esses valores forem exemplos.
+
+Antes de vender:
+1. Abra catalog.json.
+2. Substitua os quatro preços e os estoques por tamanho pelos números reais.
+3. Revise quais produtos estão ativos e quais tamanhos estão disponíveis.
+4. Somente depois altere demoData para false.
+
+PIX DIRETO
+----------
+A chave de telefone foi configurada em formato internacional: +5511950910692.
+O projeto monta um BR Code com o valor real do carrinho, identificador do pedido,
+marca ASTRA STORE e a cidade MAUA como valor inicial do campo Merchant City.
+Confirme se MAUA é a cidade correta da conta que recebe o Pix; se não for, altere
+catalog.json > pix > merchantCity e a variável PIX_MERCHANT_CITY.
+
+O QR Pix criado por chave é de confirmação MANUAL. A página mostra QR e Pix copia
+e cola, mas não consulta o banco e não consegue confirmar automaticamente que o
+dinheiro entrou. Confira o crédito na conta do titular antes de separar o pedido.
+Para confirmação automática é necessário integrar uma API Pix de instituição financeira
+ou um provedor com webhook.
+
+MERCADO PAGO
+------------
+Cartão e outras opções são processados no checkout hospedado do Mercado Pago.
+Para ativar, configure MP_ACCESS_TOKEN (credencial privada) nas variáveis de ambiente
+da Vercel. Não coloque esse token em index.html, script.js ou catalog.json.
+
+PUBLICAÇÃO E TESTE
+------------------
+Este projeto usa funções Node.js na pasta /api. GitHub Pages não executa essas funções.
+Publique na Vercel, conectando o repositório do GitHub. Para testar localmente:
+
+1. Instale Node.js LTS.
+2. Abra o terminal nesta pasta.
+3. Execute: npm install
+4. Copie .env.example para .env.local e configure as credenciais quando tiver.
+5. Execute: npm run dev
+
+Não envie .env.local ao GitHub. A pasta node_modules também não deve ser publicada.
+
+LIMITES DA VERSÃO
+-----------------
+- Carrinho salvo no navegador via localStorage.
+- Estoque é validado no servidor na criação do pagamento, mas não é reservado nem baixado.
+- Pix direto exige conferência manual.
+- Pedidos ainda não são persistidos em banco de dados.
+- Não há cálculo de frete.
+- Formulário de contato/lista ainda é demonstrativo.
+
+DICA PARA NÃO ABRIR A VERSÃO ERRADA
+-----------------------------------
+Feche a pasta antiga no VS Code. Use File > Open Folder e selecione a pasta
+"astra-store" extraída deste ZIP. Abra o index.html dessa pasta e execute pelo Live Server
+para visualizar a página; para testar os endpoints /api, use npm run dev (Vercel CLI).

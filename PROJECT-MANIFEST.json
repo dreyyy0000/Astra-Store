@@ -1,0 +1,25 @@
+{
+  "brand": "Astra Store",
+  "frontend": [
+    "index.html",
+    "style.css",
+    "script.js",
+    "catalog.json"
+  ],
+  "backend": [
+    "api/create-pix.js",
+    "api/create-order.js"
+  ],
+  "product_images": 4,
+  "team_images": 5,
+  "demo_prices_and_stock": true,
+  "payments": [
+    "Static Pix QR and copy-paste using PIX_KEY (manual confirmation)",
+    "Mercado Pago Orders Checkout for card or all account-enabled methods"
+  ],
+  "inventory_persistence": false,
+  "stock_per_size": true,
+  "package_version": "corrected-2026-11-17",
+  "pix_server_function_included": true,
+  "payment_activation_blocked_until_real_catalog": true
+}

@@ -1,0 +1,111 @@
+{
+  "currency": "BRL",
+  "demoData": true,
+  "products": [
+    {
+      "id": "oversized",
+      "name": "Oversized Essential",
+      "category": "ROUPAS / ASTRA 001",
+      "image": "assets/produtos/oversized-essential.webp",
+      "description": "Camiseta preta de modelagem ampla e visual minimalista. Peça versátil para compor diferentes combinações.",
+      "price": 89.9,
+      "stock": 12,
+      "sizes": [
+        "P",
+        "M",
+        "G",
+        "GG"
+      ],
+      "active": true,
+      "stockBySize": {
+        "P": 2,
+        "M": 3,
+        "G": 4,
+        "GG": 3
+      }
+    },
+    {
+      "id": "urban",
+      "name": "Urban Runner",
+      "category": "TÊNIS / ASTRA 002",
+      "image": "assets/produtos/urban-runner.webp",
+      "description": "Tênis de visual urbano, com construção robusta e tons neutros para acompanhar diferentes momentos.",
+      "price": 249.9,
+      "stock": 7,
+      "sizes": [
+        "37",
+        "38",
+        "39",
+        "40",
+        "41",
+        "42",
+        "43"
+      ],
+      "active": true,
+      "stockBySize": {
+        "37": 1,
+        "38": 1,
+        "39": 1,
+        "40": 1,
+        "41": 1,
+        "42": 1,
+        "43": 1
+      }
+    },
+    {
+      "id": "jacket",
+      "name": "Street Jacket",
+      "category": "ROUPAS / ASTRA 003",
+      "image": "assets/produtos/street-jacket.jpg",
+      "description": "Jaqueta de inspiração streetwear, com contraste de cores e personalidade marcante.",
+      "price": 219.9,
+      "stock": 5,
+      "sizes": [
+        "P",
+        "M",
+        "G",
+        "GG"
+      ],
+      "active": true,
+      "stockBySize": {
+        "P": 1,
+        "M": 1,
+        "G": 1,
+        "GG": 2
+      }
+    },
+    {
+      "id": "classic",
+      "name": "Street Classic",
+      "category": "TÊNIS / ASTRA 004",
+      "image": "assets/produtos/street-classic.webp",
+      "description": "Tênis preto com detalhes em azul-turquesa e inspiração esportiva.",
+      "price": 279.9,
+      "stock": 0,
+      "sizes": [
+        "37",
+        "38",
+        "39",
+        "40",
+        "41",
+        "42",
+        "43"
+      ],
+      "active": true,
+      "stockBySize": {
+        "37": 0,
+        "38": 0,
+        "39": 0,
+        "40": 0,
+        "41": 0,
+        "42": 0,
+        "43": 0
+      }
+    }
+  ],
+  "pix": {
+    "key": "+5511950910692",
+    "merchantName": "ASTRA STORE",
+    "merchantCity": "MAUA"
+  }
+}
